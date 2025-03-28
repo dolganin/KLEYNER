@@ -4,6 +4,7 @@
 #include "config.h"
 #include <string>
 #include <vector>
+#include <tuple>
 
 /// Класс, реализующий логику очистки
 class Cleaner {
@@ -12,6 +13,9 @@ public:
     
     /// Запуск процесса очистки
     void run();
+
+    /// Подсчет количества файлов, папок и общего размера перед удалением
+    std::tuple<size_t, size_t, double> countItemsToDelete();
     
 private:
     Config config;

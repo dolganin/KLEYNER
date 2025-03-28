@@ -10,13 +10,11 @@
 
 namespace fs = std::filesystem;
 
-// Вспомогательная функция для преобразования Windows-пути в WSL-формат.
-// Например: "C:\\Windows\\Temp" -> "/mnt/c/Windows/Temp"
+// Вспомогательная функция для преобразования Windows-пути в WSL-формат
 static std::string transformPathForWSL(const std::string &path) {
     if (path.size() >= 3 && std::isalpha(path[0]) && path[1] == ':') {
         char driveLetter = std::tolower(path[0]);
-        std::string rest = path.substr(2); // Убираем "C:".
-        // Заменяем обратные слеши на прямые.
+        std::string rest = path.substr(2);
         std::replace(rest.begin(), rest.end(), '\\', '/');
         return "/mnt/" + std::string(1, driveLetter) + rest;
     }
@@ -29,7 +27,6 @@ Cleaner::Cleaner(const Config &config) : config(config) {
 
 /// Формирование списка целевых директорий для очистки
 void Cleaner::buildTargetPaths() {
-    // Если целевая ОС Windows или AUTO, добавляем Windows пути
     if (config.targetOS == OS_TYPE::WINDOWS || config.targetOS == OS_TYPE::AUTO) {
         std::vector<std::string> winPaths = {
             "%TEMP%",
@@ -45,13 +42,11 @@ void Cleaner::buildTargetPaths() {
         }
     }
     
-    // Если целевая ОС Linux или AUTO, добавляем Linux пути
     if (config.targetOS == OS_TYPE::LINUX || config.targetOS == OS_TYPE::AUTO) {
         targetPaths.push_back("/tmp");
         targetPaths.push_back("/var/tmp");
     }
     
-    // Если включён флаг cleanWindows (например, при запуске под WSL), добавляем дополнительные Windows пути
     if (config.cleanWindows) {
         std::vector<std::string> extraWinPaths = {
             "C:\\Windows\\SoftwareDistribution\\Download",
@@ -66,11 +61,40 @@ void Cleaner::buildTargetPaths() {
         }
     }
     
-    // Добавляем дополнительные пути из конфигурационного файла
     for (const auto &path : config.additionalPaths) {
         targetPaths.push_back(path);
     }
 }
+
+/// Подсчет количества файлов, папок и общего размера перед удалением
+std::tuple<size_t, size_t, double> Cleaner::countItemsToDelete() {
+    size_t fileCount = 0, dirCount = 0;
+    uintmax_t totalSize = 0;
+
+    for (const auto &path : targetPaths) {
+        if (!pathExists(path)) continue;
+        if (path.find("systemd-private") != std::string::npos) continue;
+
+        try {
+            for (auto &entry : fs::recursive_directory_iterator(path)) {
+                if (!config.includeHidden && entry.path().filename().string().front() == '.')
+                    continue;
+
+                if (entry.is_directory()) {
+                    dirCount++;
+                } else if (entry.is_regular_file()) {
+                    fileCount++;
+                    totalSize += entry.file_size();
+                }
+            }
+        } catch (const fs::filesystem_error &e) {
+            LOG_WARNING("Отказ в доступе к " + path + ": " + e.what());
+        }
+    }
+
+    return {fileCount, dirCount, static_cast<double>(totalSize) / (1024 * 1024)};
+}
+
 
 /// Запуск процесса очистки
 void Cleaner::run() {
@@ -78,13 +102,13 @@ void Cleaner::run() {
     for (const auto &path : targetPaths) {
         LOG_INFO(" -> " + path);
     }
-    
-    // Последовательная обработка (параллельность можно добавить позже)
+
     for (const auto &path : targetPaths) {
         processPath(path);
     }
 }
 
+/// Рекурсивная обработка одного пути
 /// Рекурсивная обработка одного пути
 void Cleaner::processPath(const std::string &path) {
     if (!pathExists(path)) {
@@ -113,11 +137,17 @@ void Cleaner::processPath(const std::string &path) {
             }
         }
     } catch (const fs::filesystem_error &e) {
-        LOG_ERROR("Ошибка доступа к " + path + ": " + e.what());
+        // Обработка ошибок доступа, например, "Permission denied"
+        if (std::string(e.what()).find("Permission denied") != std::string::npos) {
+            LOG_WARNING("Отказ в доступе к " + path + ". Пропускаем.");
+        } else {
+            LOG_ERROR("Ошибка доступа к " + path + ": " + e.what());
+        }
     }
 }
 
-/// Удаление файла или директории (с учётом dry-run)
+
+/// Удаление файла или директории
 void Cleaner::deleteEntry(const std::string &path) {
     try {
         if (fs::is_directory(path))

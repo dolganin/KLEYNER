@@ -1,4 +1,4 @@
-#ifndef LOGGER_H
+#ifndef LOGGER_H 
 #define LOGGER_H
 
 #include <string>
@@ -7,19 +7,23 @@
 enum LogLevel {
     INFO,
     DEBUG,
-    ERROR
+    ERROR,
+    WARNING
 };
 
-/// Инициализация логгера с учетом подробного режима (verbose)
+// Инициализация логгера с учетом подробного режима (verbose)
 void initLogger(bool verbose);
 
-/// Логирование информационных сообщений
+// Логирование информационных сообщений
 void LOG_INFO(const std::string &msg);
 
-/// Логирование отладочных сообщений (выводятся, если включен verbose)
+// Логирование отладочных сообщений (выводятся, если включен verbose)
 void LOG_DEBUG(const std::string &msg);
 
-/// Логирование сообщений об ошибках
+// Логирование сообщений об ошибках
 void LOG_ERROR(const std::string &msg);
+
+// Логирование предупреждений
+void LOG_WARNING(const std::string &msg);
 
 #endif // LOGGER_H
