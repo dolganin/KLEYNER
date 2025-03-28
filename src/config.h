@@ -13,12 +13,14 @@ enum class OS_TYPE {
 
 // Структура конфигурации для утилиты
 struct Config {
-    bool verbose = false;          // Подробный вывод
-    bool dryRun = false;           // Режим симуляции
-    bool cleanWindows = false;     // Флаг принудительной очистки Windows-директорий (при запуске под WSL)
-    bool includeHidden = false;    // Обрабатывать скрытые файлы/папки
+    bool verbose = false;           // Подробный вывод
+    bool dryRun = false;            // Режим симуляции (ничего не удаляется, только лог)
+    bool cleanWindows = false;      // Флаг принудительной очистки Windows-директорий (в WSL)
+    bool includeHidden = false;     // Обрабатывать скрытые файлы/папки
+    bool wsl = false;               // Флаг WSL (если true, меняем пути на /mnt/c/... и т.д.)
     OS_TYPE targetOS = OS_TYPE::AUTO; // Целевая ОС (AUTO, WINDOWS или LINUX)
     std::vector<std::string> additionalPaths; // Дополнительные пути для очистки
+    std::string configFile = "configs/basic.cfg"; // Путь к конфигурационному файлу
 };
 
 /// Функция для парсинга аргументов командной строки

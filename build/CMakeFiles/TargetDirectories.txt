@@ -1,3 +1,0 @@
-/home/bolgarin/workspace/code/DoCleaner/build/CMakeFiles/cleaner.dir
-/home/bolgarin/workspace/code/DoCleaner/build/CMakeFiles/edit_cache.dir
-/home/bolgarin/workspace/code/DoCleaner/build/CMakeFiles/rebuild_cache.dir

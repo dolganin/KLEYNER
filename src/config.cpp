@@ -4,7 +4,7 @@
 #include <sstream>
 #include <algorithm>
 
-// Вспомогательная функция для обрезки пробелов
+/// Вспомогательная функция для обрезки пробелов
 static std::string trim(const std::string& s) {
     auto start = s.begin();
     while (start != s.end() && std::isspace(*start)) start++;
@@ -16,8 +16,10 @@ static std::string trim(const std::string& s) {
 /// Парсинг аргументов командной строки
 Config parseArguments(int argc, char* argv[]) {
     Config config;
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
+
         if (arg == "--verbose" || arg == "-v") {
             config.verbose = true;
         } else if (arg == "--dry-run") {
@@ -26,6 +28,8 @@ Config parseArguments(int argc, char* argv[]) {
             config.cleanWindows = true;
         } else if (arg == "--include-hidden") {
             config.includeHidden = true;
+        } else if (arg == "--wsl") {
+            config.wsl = true;
         } else if (arg == "--os") {
             if (i + 1 < argc) {
                 std::string osArg = argv[++i];
@@ -36,13 +40,17 @@ Config parseArguments(int argc, char* argv[]) {
                 else
                     config.targetOS = OS_TYPE::AUTO;
             }
+        } else if (arg == "--config") {
+            if (i + 1 < argc) {
+                config.configFile = argv[++i];
+            }
         }
-        // Можно добавить дополнительные параметры по необходимости
     }
+
     return config;
 }
 
-/// Загрузка конфигурации из файла формата .cfg (пример INI-подобного)
+/// Загрузка конфигурации из файла (INI-подобный формат)
 bool loadConfigFromFile(const std::string &filePath, Config &config) {
     std::ifstream inFile(filePath);
     if (!inFile) {
@@ -79,6 +87,12 @@ bool loadConfigFromFile(const std::string &filePath, Config &config) {
                 config.verbose = (value == "true");
             else if (key == "dry_run")
                 config.dryRun = (value == "true");
+            else if (key == "wsl")
+                config.wsl = (value == "true");
+            else if (key == "clean_windows")
+                config.cleanWindows = (value == "true");
+            else if (key == "include_hidden")
+                config.includeHidden = (value == "true");
             else if (key == "os") {
                 if (value == "win" || value == "windows")
                     config.targetOS = OS_TYPE::WINDOWS;
@@ -87,8 +101,11 @@ bool loadConfigFromFile(const std::string &filePath, Config &config) {
                 else
                     config.targetOS = OS_TYPE::AUTO;
             }
+        } else if (currentSection == "Paths") {
+            // Добавляем путь в список дополнительных директорий для очистки
+            config.additionalPaths.push_back(value);
         }
-        // Здесь можно расширять обработку других секций (Windows, Linux и т.п.)
     }
+
     return true;
 }

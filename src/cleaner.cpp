@@ -5,9 +5,23 @@
 #include <filesystem>
 #include <thread>
 #include <vector>
+#include <algorithm>
+#include <cctype>
 
-// Для удобства пространства имён std::filesystem
 namespace fs = std::filesystem;
+
+// Вспомогательная функция для преобразования Windows-пути в WSL-формат.
+// Например: "C:\\Windows\\Temp" -> "/mnt/c/Windows/Temp"
+static std::string transformPathForWSL(const std::string &path) {
+    if (path.size() >= 3 && std::isalpha(path[0]) && path[1] == ':') {
+        char driveLetter = std::tolower(path[0]);
+        std::string rest = path.substr(2); // Убираем "C:".
+        // Заменяем обратные слеши на прямые.
+        std::replace(rest.begin(), rest.end(), '\\', '/');
+        return "/mnt/" + std::string(1, driveLetter) + rest;
+    }
+    return path;
+}
 
 Cleaner::Cleaner(const Config &config) : config(config) {
     buildTargetPaths();
@@ -15,28 +29,44 @@ Cleaner::Cleaner(const Config &config) : config(config) {
 
 /// Формирование списка целевых директорий для очистки
 void Cleaner::buildTargetPaths() {
-    // Пример: в зависимости от целевой ОС и параметров конфигурации
+    // Если целевая ОС Windows или AUTO, добавляем Windows пути
     if (config.targetOS == OS_TYPE::WINDOWS || config.targetOS == OS_TYPE::AUTO) {
-        // Добавляем системные временные каталоги Windows
-        targetPaths.push_back("%TEMP%");
-        targetPaths.push_back("%TMP%");
-        targetPaths.push_back("C:\\Windows\\Temp");
-        targetPaths.push_back("C:\\Windows\\Prefetch");
-        // Здесь можно добавить остальные пути из конфига (например, кэши браузеров, логи и т.д.)
+        std::vector<std::string> winPaths = {
+            "%TEMP%",
+            "%TMP%",
+            "C:\\Windows\\Temp",
+            "C:\\Windows\\Prefetch"
+        };
+        for (auto p : winPaths) {
+            if (config.wsl) {
+                p = transformPathForWSL(p);
+            }
+            targetPaths.push_back(p);
+        }
     }
+    
+    // Если целевая ОС Linux или AUTO, добавляем Linux пути
     if (config.targetOS == OS_TYPE::LINUX || config.targetOS == OS_TYPE::AUTO) {
-        // Добавляем каталоги для Linux/WSL
         targetPaths.push_back("/tmp");
         targetPaths.push_back("/var/tmp");
-        // Добавляем кэш пакетных менеджеров и прочие пути
     }
-    // Если указан флаг cleanWindows (например, при запуске под WSL)
+    
+    // Если включён флаг cleanWindows (например, при запуске под WSL), добавляем дополнительные Windows пути
     if (config.cleanWindows) {
-        targetPaths.push_back("C:\\Windows\\SoftwareDistribution\\Download");
-        targetPaths.push_back("C:\\Windows\\Panther");
-        targetPaths.push_back("C:\\Windows\\WER");
+        std::vector<std::string> extraWinPaths = {
+            "C:\\Windows\\SoftwareDistribution\\Download",
+            "C:\\Windows\\Panther",
+            "C:\\Windows\\WER"
+        };
+        for (auto p : extraWinPaths) {
+            if (config.wsl) {
+                p = transformPathForWSL(p);
+            }
+            targetPaths.push_back(p);
+        }
     }
-    // Добавляем дополнительные пути, если они заданы в конфиге
+    
+    // Добавляем дополнительные пути из конфигурационного файла
     for (const auto &path : config.additionalPaths) {
         targetPaths.push_back(path);
     }
@@ -49,7 +79,7 @@ void Cleaner::run() {
         LOG_INFO(" -> " + path);
     }
     
-    // Простая реализация с последовательной обработкой (параллелизм можно добавить с использованием std::thread)
+    // Последовательная обработка (параллельность можно добавить позже)
     for (const auto &path : targetPaths) {
         processPath(path);
     }
@@ -57,21 +87,25 @@ void Cleaner::run() {
 
 /// Рекурсивная обработка одного пути
 void Cleaner::processPath(const std::string &path) {
-    // Преобразуем строку пути в реальный путь с помощью утилитарных функций
     if (!pathExists(path)) {
         LOG_DEBUG("Путь не существует: " + path);
         return;
     }
     
-    // Используем std::filesystem для рекурсивного обхода
+    // Исключаем systemd-private каталоги
+    if (path.find("systemd-private") != std::string::npos) {
+        LOG_DEBUG("Пропущен защищённый системный путь: " + path);
+        return;
+    }
+    
     try {
         for (auto &entry : fs::recursive_directory_iterator(path)) {
             std::string entryPath = entry.path().string();
-            // Если не включаем скрытые файлы, можно добавить фильтрацию по атрибуту
+            // Фильтруем скрытые файлы, если соответствующий флаг не включён
             if (!config.includeHidden && entry.path().filename().string().front() == '.')
                 continue;
             
-            // При dry-run выводим информацию, иначе удаляем
+            // В режиме dry-run выводим, что будет удалено, иначе производим удаление
             if (config.dryRun) {
                 LOG_INFO("[Dry Run] Будет удалено: " + entryPath);
             } else {
@@ -83,7 +117,7 @@ void Cleaner::processPath(const std::string &path) {
     }
 }
 
-/// Удаление файла или директории (учитывая dry-run)
+/// Удаление файла или директории (с учётом dry-run)
 void Cleaner::deleteEntry(const std::string &path) {
     try {
         if (fs::is_directory(path))
