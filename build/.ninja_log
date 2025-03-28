@@ -1,0 +1,13 @@
+# ninja log v5
+2	648	1743179989089072930	CMakeFiles/cleaner.dir/src/utils.cpp.o	629d576709101e19
+1	396	1743179883113350914	CMakeFiles/cleaner.dir/src/main.cpp.o	a87acc8927095b56
+1	468	1743179883183334405	CMakeFiles/cleaner.dir/src/config.cpp.o	1107c9e91f57247e
+2	435	1743179956509033871	CMakeFiles/cleaner.dir/src/logger.cpp.o	63bd5b92855400ed
+2	692	1743179989128660133	CMakeFiles/cleaner.dir/src/cleaner.cpp.o	ca3fdce336d4db6b
+692	852	1743179989287008942	cleaner	7af1538d4da861ea
+4	514	1743180065394466670	CMakeFiles/cleaner.dir/src/logger.cpp.o	63bd5b92855400ed
+3	548	1743180065424134479	CMakeFiles/cleaner.dir/src/main.cpp.o	a87acc8927095b56
+4	631	1743180065513137908	CMakeFiles/cleaner.dir/src/config.cpp.o	1107c9e91f57247e
+5	771	1743180065641698421	CMakeFiles/cleaner.dir/src/utils.cpp.o	629d576709101e19
+5	865	1743180065740591121	CMakeFiles/cleaner.dir/src/cleaner.cpp.o	ca3fdce336d4db6b
+865	1030	1743180065908708713	cleaner	7af1538d4da861ea
