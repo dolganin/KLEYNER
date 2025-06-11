@@ -35,6 +35,9 @@ void Cleaner::buildTargetPaths() {
             "C:\\Windows\\Temp",
             "C:\\Windows\\Prefetch"
         };
+        std::vector<std::string> userWinPaths = {
+            "%USERPROFILE%\\Downloads"
+        };
         std::vector<std::string> dockerWin = {
             "%USERPROFILE%\\.docker",
             "C:\\ProgramData\\DockerDesktop"
@@ -43,6 +46,12 @@ void Cleaner::buildTargetPaths() {
             if (config.wsl) {
                 p = transformPathForWSL(p);
             }
+            p = expandPath(p);
+            if (p.empty() || p.find('%') != std::string::npos) continue;
+            targetPaths.push_back(p);
+        }
+        for (auto p : userWinPaths) {
+            if (config.wsl) p = transformPathForWSL(p);
             p = expandPath(p);
             if (p.empty() || p.find('%') != std::string::npos) continue;
             targetPaths.push_back(p);
@@ -60,6 +69,7 @@ void Cleaner::buildTargetPaths() {
         targetPaths.push_back("/var/tmp");
         targetPaths.push_back(expandPath("~/.docker"));
         targetPaths.push_back("/var/lib/docker");
+        targetPaths.push_back(expandPath("~/Downloads"));
     }
     
     if (config.cleanWindows) {
