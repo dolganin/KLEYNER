@@ -3,6 +3,7 @@
 #include "utils.h"
 
 #include <filesystem>
+#include <system_error>
 #include <thread>
 #include <vector>
 #include <algorithm>
@@ -76,15 +77,22 @@ std::tuple<size_t, size_t, double> Cleaner::countItemsToDelete() {
         if (path.find("systemd-private") != std::string::npos) continue;
 
         try {
-            for (auto &entry : fs::recursive_directory_iterator(path)) {
-                if (!config.includeHidden && entry.path().filename().string().front() == '.')
+            for (auto it = fs::recursive_directory_iterator(
+                         path, fs::directory_options::skip_permission_denied);
+                 it != fs::recursive_directory_iterator(); ++it) {
+                const fs::path &p = it->path();
+                if (p.string().find("systemd-private") != std::string::npos) {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+                if (!config.includeHidden && p.filename().string().front() == '.')
                     continue;
 
-                if (entry.is_directory()) {
+                if (it->is_directory()) {
                     dirCount++;
-                } else if (entry.is_regular_file()) {
+                } else if (it->is_regular_file()) {
                     fileCount++;
-                    totalSize += entry.file_size();
+                    totalSize += it->file_size();
                 }
             }
         } catch (const fs::filesystem_error &e) {
@@ -123,13 +131,23 @@ void Cleaner::processPath(const std::string &path) {
     }
     
     try {
-        for (auto &entry : fs::recursive_directory_iterator(path)) {
-            std::string entryPath = entry.path().string();
-            // Фильтруем скрытые файлы, если соответствующий флаг не включён
-            if (!config.includeHidden && entry.path().filename().string().front() == '.')
+        std::vector<fs::path> entries;
+        for (auto it = fs::recursive_directory_iterator(
+                     path, fs::directory_options::skip_permission_denied);
+             it != fs::recursive_directory_iterator(); ++it) {
+            const fs::path &p = it->path();
+            if (p.string().find("systemd-private") != std::string::npos) {
+                it.disable_recursion_pending();
                 continue;
-            
-            // В режиме dry-run выводим, что будет удалено, иначе производим удаление
+            }
+            if (!config.includeHidden && p.filename().string().front() == '.')
+                continue;
+
+            entries.push_back(p);
+        }
+
+        for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+            std::string entryPath = it->string();
             if (config.dryRun) {
                 LOG_INFO("[Dry Run] Будет удалено: " + entryPath);
             } else {
@@ -149,13 +167,15 @@ void Cleaner::processPath(const std::string &path) {
 
 /// Удаление файла или директории
 void Cleaner::deleteEntry(const std::string &path) {
-    try {
-        if (fs::is_directory(path))
-            fs::remove_all(path);
-        else
-            fs::remove(path);
+    std::error_code ec;
+    if (fs::is_directory(path))
+        fs::remove_all(path, ec);
+    else
+        fs::remove(path, ec);
+
+    if (ec) {
+        LOG_WARNING("Ошибка удаления " + path + ": " + ec.message());
+    } else {
         LOG_INFO("Удалено: " + path);
-    } catch (const fs::filesystem_error &e) {
-        LOG_ERROR("Ошибка удаления " + path + ": " + e.what());
     }
 }
