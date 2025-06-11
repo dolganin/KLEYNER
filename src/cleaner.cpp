@@ -76,7 +76,8 @@ std::tuple<size_t, size_t, double> Cleaner::countItemsToDelete() {
         if (path.find("systemd-private") != std::string::npos) continue;
 
         try {
-            for (auto &entry : fs::recursive_directory_iterator(path)) {
+            for (auto &entry : fs::recursive_directory_iterator(
+                     path, fs::directory_options::skip_permission_denied)) {
                 if (!config.includeHidden && entry.path().filename().string().front() == '.')
                     continue;
 
@@ -123,7 +124,8 @@ void Cleaner::processPath(const std::string &path) {
     }
     
     try {
-        for (auto &entry : fs::recursive_directory_iterator(path)) {
+        for (auto &entry : fs::recursive_directory_iterator(
+                 path, fs::directory_options::skip_permission_denied)) {
             std::string entryPath = entry.path().string();
             // Фильтруем скрытые файлы, если соответствующий флаг не включён
             if (!config.includeHidden && entry.path().filename().string().front() == '.')
