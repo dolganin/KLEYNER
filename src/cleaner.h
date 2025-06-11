@@ -16,6 +16,9 @@ public:
 
     /// Подсчет количества файлов, папок и общего размера перед удалением
     std::tuple<size_t, size_t, double> countItemsToDelete();
+
+    /// Печать дерева директорий с их размерами
+    void printSizeTree();
     
 private:
     Config config;
@@ -29,6 +32,8 @@ private:
     
     /// Удаление файла или директории (с учётом dry-run)
     void deleteEntry(const std::string &path);
+
+    void printSubTree(const std::string &path, int level);
 };
 
 #endif // CLEANER_H

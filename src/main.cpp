@@ -51,6 +51,8 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Папок: " + std::to_string(numDirs));
     LOG_INFO("Общий размер: " + std::to_string(totalSize) + " MB");
 
+    cleaner.printSizeTree();
+
     // Запрашиваем подтверждение от пользователя перед удалением
     std::string confirmation;
     std::cout << "Вы уверены, что хотите продолжить удаление? (y/n): ";
