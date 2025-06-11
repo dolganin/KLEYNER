@@ -1,69 +1,57 @@
-#include "config.h"
-#include "logger.h"
+#include "scanner.h"
 #include "cleaner.h"
-
+#include "ui.h"
+#include <filesystem>
 #include <iostream>
-#include <fstream>
-#include <tuple>
-
-// Функция для вывода пиксель-арта
-void printPixelArt(const std::string& filePath) {
-    std::ifstream artFile(filePath);
-    if (!artFile) {
-        LOG_WARNING("Не удалось загрузить ASCII-арт из " + filePath);
-        return;
-    }
-    
-    std::string line;
-    while (std::getline(artFile, line)) {
-        std::cout << line << std::endl;
-    }
-}
+#include <vector>
+#include <string>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 int main(int argc, char* argv[]) {
-    // Вывод версии и ASCII-арта
-    std::cout << "KLEYNER Utility v1.0" << std::endl;
-    printPixelArt("media/art.txt");
+    bool dryRun = false;
+    bool json = false;
+    std::vector<std::filesystem::path> exclude;
 
-    // Парсим параметры командной строки
-    Config config = parseArguments(argc, argv);
-    
-    // Если путь к конфигу не указан, используем значение по умолчанию
-    std::string configFile = config.configFile.empty() ? "configs/basic.cfg" : config.configFile;
-    
-    if (!loadConfigFromFile(configFile, config)) {
-        LOG_ERROR("Не удалось загрузить файл конфигурации " + configFile + ", продолжаем с параметрами по умолчанию.");
+    for(int i=1;i<argc;++i){
+        std::string arg = argv[i];
+        if(arg=="--dry-run") dryRun=true;
+        else if(arg=="--json") json=true;
+        else if(arg=="--exclude" && i+1<argc){
+            std::string ex = argv[++i];
+            size_t pos=0;
+            while((pos=ex.find(','))!=std::string::npos){
+                exclude.push_back(ex.substr(0,pos));
+                ex.erase(0,pos+1);
+            }
+            if(!ex.empty()) exclude.push_back(ex);
+        }
+        else if(arg=="--self-update") {
+            system("git pull");
+            system("scripts/build_nix.sh");
+            return 0;
+        }
+        else if(arg=="--help") {
+            std::cout<<"Usage: cleaner [--dry-run] [--json] [--exclude p1,p2] [--self-update]"<<std::endl;
+            return 0;
+        }
     }
-    
-    // Инициализируем логирование согласно настройке verbose
-    initLogger(config.verbose);
-    LOG_INFO("Запуск утилиты очистки");
-    
-    // Создаём объект очистки
-    Cleaner cleaner(config);
 
-    // Подсчитываем количество файлов, папок и общий размер
-    auto [numFiles, numDirs, totalSize] = cleaner.countItemsToDelete();
-
-    // Выводим информацию о том, что будет удалено
-    LOG_INFO("Будет удалено:");
-    LOG_INFO("Файлов: " + std::to_string(numFiles));
-    LOG_INFO("Папок: " + std::to_string(numDirs));
-    LOG_INFO("Общий размер: " + std::to_string(totalSize) + " MB");
-
-    // Запрашиваем подтверждение от пользователя перед удалением
-    std::string confirmation;
-    std::cout << "Вы уверены, что хотите продолжить удаление? (y/n): ";
-    std::getline(std::cin, confirmation);
-    
-    if (confirmation == "y" || confirmation == "Y") {
-        // Запускаем процесс очистки
-        cleaner.run();
-        LOG_INFO("Очистка завершена.");
-    } else {
-        LOG_INFO("Очистка отменена пользователем.");
+#ifdef _WIN32
+    // elevation handled via platform_win.cpp
+#else
+    if(geteuid()!=0){
+        std::cerr<<"Needs root. Try sudo."<<std::endl;
+        return 1;
     }
-    
-    LOG_INFO("Работа утилиты завершена");
+#endif
+
+    auto sizes = scan_directory_sizes(std::filesystem::path{"/"}, exclude);
+    print_top(sizes, 10, json);
+
+    auto candidates = default_candidate_paths();
+    auto freed = clean_paths(candidates, {dryRun});
+    std::cerr<<"Freed "<<freed/1024/1024<<" MB"<<std::endl;
     return 0;
 }
