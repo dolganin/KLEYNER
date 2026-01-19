@@ -10,6 +10,8 @@
 #include <set>
 #include <sstream>
 #include <iomanip>
+#include <cstdlib>
+#include <iostream>
 
 namespace fs = std::filesystem;
 
@@ -145,6 +147,32 @@ static std::string formatSize(uintmax_t bytes) {
     }
     return out.str();
 }
+
+static bool commandExistsLocal(const std::string &cmd) {
+#ifdef _WIN32
+    std::string check = "where " + cmd + " >nul 2>&1";
+#else
+    std::string check = "command -v " + cmd + " >/dev/null 2>&1";
+#endif
+    return std::system(check.c_str()) == 0;
+}
+
+#ifndef _WIN32
+static std::string shellEscape(const std::string &input) {
+    std::string out;
+    out.reserve(input.size() + 2);
+    out.push_back('\'');
+    for (char c : input) {
+        if (c == '\'') {
+            out.append("'\\''");
+        } else {
+            out.push_back(c);
+        }
+    }
+    out.push_back('\'');
+    return out;
+}
+#endif
 
 Cleaner::Cleaner(const Config &config) : config(config) {
     buildTargetPaths();
@@ -353,6 +381,32 @@ void Cleaner::run() {
                 LOG_WARNING("    " + p);
             }
         }
+#ifndef _WIN32
+        if (config.allowSudo && !config.dryRun) {
+            if (!commandExistsLocal("sudo")) {
+                LOG_WARNING("sudo не найден");
+                return;
+            }
+            std::cout << "Повторить удаление с sudo для этих путей? (y/n): ";
+            std::string answer;
+            std::getline(std::cin, answer);
+            if (answer == "y" || answer == "Y") {
+                for (const auto &p : deniedPaths) {
+                    std::string cmd = "sudo rm -rf -- " + shellEscape(p);
+                    int code = std::system(cmd.c_str());
+                    if (code != 0) {
+                        LOG_WARNING("sudo удаление не удалось: " + p);
+                    } else {
+                        LOG_INFO("sudo удалено: " + p);
+                    }
+                }
+            } else {
+                LOG_INFO("sudo очистка отменена пользователем.");
+            }
+        }
+#else
+        (void)commandExistsLocal;
+#endif
     }
 }
 

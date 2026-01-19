@@ -115,11 +115,19 @@ std::uintmax_t directorySize(const fs::path &path) {
     if (!fs::exists(path, ec)) return 0;
     if (fs::is_regular_file(path, ec)) return fs::file_size(path, ec);
     std::uintmax_t size = 0;
-    for (auto it = fs::recursive_directory_iterator(
-                 path, fs::directory_options::skip_permission_denied);
-         it != fs::recursive_directory_iterator(); ++it) {
+    fs::recursive_directory_iterator it(path, fs::directory_options::skip_permission_denied, ec);
+    fs::recursive_directory_iterator end;
+    if (ec) return 0;
+    for (; it != end; it.increment(ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
         if (it->is_regular_file(ec)) {
-            size += it->file_size(ec);
+            if (!ec) size += it->file_size(ec);
+            ec.clear();
+        } else {
+            ec.clear();
         }
     }
     return size;

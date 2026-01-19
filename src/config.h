@@ -25,6 +25,7 @@ struct Config {
     bool includeHidden = false;     // Обрабатывать скрытые файлы/папки
     bool wsl = false;               // Флаг WSL (если true, меняем пути на /mnt/c/... и т.д.)
     bool wslSet = false;
+    bool allowSudo = false;
     bool cliClean = false;
     bool dockerPrune = false;
     bool dockerPruneAll = false;

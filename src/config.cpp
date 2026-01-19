@@ -83,6 +83,8 @@ Config parseArguments(int argc, char* argv[]) {
         } else if (arg == "--no-wsl") {
             config.wsl = false;
             config.wslSet = true;
+        } else if (arg == "--allow-sudo" || arg == "--sudo") {
+            config.allowSudo = true;
         } else if (arg == "--cli-clean") {
             config.cliClean = true;
         } else if (arg == "--docker-prune") {
@@ -153,6 +155,8 @@ bool loadConfigFromFile(const std::string &filePath, Config &config) {
                 config.includeHidden = parseBool(value);
             else if (key == "os")
                 config.targetOS = parseOsValue(value);
+            else if (key == "allow_sudo")
+                config.allowSudo = parseBool(value);
             else if (key == "cli_clean")
                 config.cliClean = parseBool(value);
             else if (key == "docker_prune")
