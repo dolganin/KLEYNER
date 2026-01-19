@@ -17,4 +17,6 @@ std::vector<std::filesystem::path> listFiles(const std::string &directory);
 /// Подсчёт размера директории (в байтах)
 std::uintmax_t directorySize(const std::filesystem::path &path);
 
+bool isWSL();
+
 #endif // UTILS_H

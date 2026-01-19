@@ -8,7 +8,13 @@
 enum class OS_TYPE {
     AUTO,
     WINDOWS,
-    LINUX
+    LINUX,
+    BOTH
+};
+
+struct PathEntry {
+    std::string key;
+    std::string value;
 };
 
 // Структура конфигурации для утилиты
@@ -18,7 +24,15 @@ struct Config {
     bool cleanWindows = false;      // Флаг принудительной очистки Windows-директорий (в WSL)
     bool includeHidden = false;     // Обрабатывать скрытые файлы/папки
     bool wsl = false;               // Флаг WSL (если true, меняем пути на /mnt/c/... и т.д.)
+    bool wslSet = false;
+    bool cliClean = false;
+    bool dockerPrune = false;
+    bool dockerPruneAll = false;
+    bool dockerPruneVolumes = false;
     OS_TYPE targetOS = OS_TYPE::AUTO; // Целевая ОС (AUTO, WINDOWS или LINUX)
+    std::vector<PathEntry> windowsPaths;
+    std::vector<PathEntry> linuxPaths;
+    std::vector<PathEntry> commonPaths;
     std::vector<std::string> additionalPaths; // Дополнительные пути для очистки
     std::string configFile = "configs/basic.cfg"; // Путь к конфигурационному файлу
 };

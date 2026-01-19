@@ -17,12 +17,19 @@ public:
     /// Подсчет количества файлов, папок и общего размера перед удалением
     std::tuple<size_t, size_t, double> countItemsToDelete();
 
-    /// Печать дерева директорий с их размерами
-    void printSizeTree();
+    void printPlan();
     
 private:
+    struct TargetGroup {
+        std::string scope;
+        std::string name;
+        std::string pattern;
+        std::vector<std::string> paths;
+    };
+
     Config config;
-    std::vector<std::string> targetPaths;
+    std::vector<TargetGroup> targets;
+    std::vector<std::string> deniedPaths;
     
     /// Формирование списка путей для очистки на основе конфигурации
     void buildTargetPaths();
@@ -33,7 +40,9 @@ private:
     /// Удаление файла или директории (с учётом dry-run)
     void deleteEntry(const std::string &path);
 
-    void printSubTree(const std::string &path, int level);
+    void addTargetGroup(const std::string &scope, const PathEntry &entry, bool windowsPath);
+    std::vector<std::string> resolvePattern(const std::string &path) const;
+    void addDeniedPath(const std::string &path);
 };
 
 #endif // CLEANER_H

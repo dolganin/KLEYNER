@@ -8,6 +8,7 @@
 #include <tuple>
 #include <filesystem>
 #include <vector>
+#include <cstdlib>
 
 // Функция для вывода пиксель-арта
 void printPixelArt(const std::string& filePath) {
@@ -85,63 +86,153 @@ static void handlePythonEnvironments(const Config &config) {
     }
 }
 
-static void pruneDockerImages() {
-    LOG_INFO("Запуск docker image prune...");
-    int code = std::system("docker image prune -a -f > /dev/null 2>&1");
+static bool commandExists(const std::string &cmd) {
+#ifdef _WIN32
+    std::string check = "where " + cmd + " >nul 2>&1";
+#else
+    std::string check = "command -v " + cmd + " >/dev/null 2>&1";
+#endif
+    return std::system(check.c_str()) == 0;
+}
+
+static bool runCommand(const std::string &cmd, const Config &config) {
+    if (config.dryRun) {
+        LOG_INFO("[Dry Run] Команда: " + cmd);
+        return true;
+    }
+    LOG_INFO("Команда: " + cmd);
+    int code = std::system(cmd.c_str());
     if (code != 0) {
-        LOG_WARNING("Не удалось выполнить docker image prune");
+        LOG_WARNING("Команда завершилась с ошибкой: " + cmd);
+        return false;
+    }
+    return true;
+}
+
+static void runCliCleaners(const Config &config) {
+    if (!config.cliClean && !config.dockerPrune) return;
+
+    LOG_INFO("CLI очистка:");
+    bool ranAny = false;
+
+    if (config.cliClean) {
+        if (commandExists("pip")) {
+            ranAny |= runCommand("pip cache purge", config);
+        } else {
+            LOG_INFO("pip не найден");
+        }
+
+        if (commandExists("npm")) {
+            ranAny |= runCommand("npm cache clean --force", config);
+        } else {
+            LOG_INFO("npm не найден");
+        }
+
+        if (commandExists("yarn")) {
+            ranAny |= runCommand("yarn cache clean", config);
+        } else {
+            LOG_INFO("yarn не найден");
+        }
+
+        if (commandExists("pnpm")) {
+            ranAny |= runCommand("pnpm store prune", config);
+        } else {
+            LOG_INFO("pnpm не найден");
+        }
+
+        if (commandExists("go")) {
+            ranAny |= runCommand("go clean -cache -testcache -modcache -fuzzcache", config);
+        } else {
+            LOG_INFO("go не найден");
+        }
+
+        if (commandExists("dotnet")) {
+            ranAny |= runCommand("dotnet nuget locals http-cache --clear", config);
+            ranAny |= runCommand("dotnet nuget locals global-packages --clear", config);
+            ranAny |= runCommand("dotnet nuget locals temp --clear", config);
+            ranAny |= runCommand("dotnet nuget locals plugins-cache --clear", config);
+        } else if (commandExists("nuget")) {
+            ranAny |= runCommand("nuget locals http-cache -clear", config);
+            ranAny |= runCommand("nuget locals global-packages -clear", config);
+            ranAny |= runCommand("nuget locals temp -clear", config);
+            ranAny |= runCommand("nuget locals plugins-cache -clear", config);
+        } else {
+            LOG_INFO("dotnet/nuget не найден");
+        }
+    }
+
+    if (config.dockerPrune) {
+        if (commandExists("docker")) {
+            std::string cmd = "docker system prune -f";
+            if (config.dockerPruneAll) cmd += " -a";
+            if (config.dockerPruneVolumes) cmd += " --volumes";
+            ranAny |= runCommand(cmd, config);
+        } else {
+            LOG_INFO("docker не найден");
+        }
+    }
+
+    if (!ranAny) {
+        LOG_INFO("Нет доступных CLI команд для очистки");
     }
 }
 
 int main(int argc, char* argv[]) {
-    // Вывод версии и ASCII-арта
     std::cout << "KLEYNER Utility v1.0" << std::endl;
     printPixelArt("media/art.txt");
 
-    // Парсим параметры командной строки
     Config config = parseArguments(argc, argv);
     
-    // Если путь к конфигу не указан, используем значение по умолчанию
     std::string configFile = config.configFile.empty() ? "configs/basic.cfg" : config.configFile;
     
     if (!loadConfigFromFile(configFile, config)) {
         LOG_ERROR("Не удалось загрузить файл конфигурации " + configFile + ", продолжаем с параметрами по умолчанию.");
     }
+
+    if (!config.wslSet) {
+        config.wsl = isWSL();
+    }
+    if (config.targetOS == OS_TYPE::AUTO) {
+#ifdef _WIN32
+        config.targetOS = OS_TYPE::WINDOWS;
+#else
+        config.targetOS = OS_TYPE::LINUX;
+#endif
+    }
     
-    // Инициализируем логирование согласно настройке verbose
     initLogger(config.verbose);
     LOG_INFO("Запуск утилиты очистки");
+
+    std::string mode;
+    if (config.targetOS == OS_TYPE::WINDOWS) mode = "Windows";
+    else if (config.targetOS == OS_TYPE::LINUX) mode = "Linux";
+    else if (config.targetOS == OS_TYPE::BOTH) mode = "Windows + Linux";
+    else mode = "Auto";
+    LOG_INFO("Режим очистки: " + mode);
+    if (config.wsl) LOG_INFO("Обнаружен WSL режим");
     
-    // Создаём объект очистки
     Cleaner cleaner(config);
 
-    // Подсчитываем количество файлов, папок и общий размер
+    cleaner.printPlan();
     auto [numFiles, numDirs, totalSize] = cleaner.countItemsToDelete();
 
-    // Выводим информацию о том, что будет удалено
     LOG_INFO("Будет удалено:");
     LOG_INFO("Файлов: " + std::to_string(numFiles));
     LOG_INFO("Папок: " + std::to_string(numDirs));
     LOG_INFO("Общий размер: " + std::to_string(totalSize) + " MB");
 
-    cleaner.printSizeTree();
-
-    // Запрашиваем подтверждение от пользователя перед удалением
     std::string confirmation;
     std::cout << "Вы уверены, что хотите продолжить удаление? (y/n): ";
     std::getline(std::cin, confirmation);
     
     if (confirmation == "y" || confirmation == "Y") {
-        // Запускаем процесс очистки
         cleaner.run();
+        runCliCleaners(config);
+        handlePythonEnvironments(config);
         LOG_INFO("Очистка завершена.");
     } else {
         LOG_INFO("Очистка отменена пользователем.");
     }
-
-    // Дополнительные действия
-    handlePythonEnvironments(config);
-    pruneDockerImages();
 
     LOG_INFO("Работа утилиты завершена");
     return 0;
