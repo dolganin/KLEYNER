@@ -96,7 +96,11 @@ std::string expandPath(const std::string &path) {
 }
 
 bool pathExists(const std::string &path) {
-    return fs::exists(expandPath(path));
+    std::error_code ec;
+    std::string p = expandPath(path);
+    bool exists = fs::exists(p, ec);
+    if (ec == std::make_error_code(std::errc::permission_denied)) return true;
+    return exists;
 }
 
 std::vector<fs::path> listFiles(const std::string &directory) {

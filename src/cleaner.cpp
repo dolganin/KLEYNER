@@ -338,13 +338,17 @@ std::tuple<size_t, size_t, double> Cleaner::countItemsToDelete() {
                     if (!config.includeHidden && !name.empty() && name.front() == '.')
                         continue;
 
-                    if (it->is_directory()) {
-                        dirCount++;
-                    } else if (it->is_regular_file()) {
+                std::error_code ec;
+                if (it->is_directory(ec)) {
+                    if (!ec) dirCount++;
+                } else if (it->is_regular_file(ec)) {
+                    if (!ec) {
                         fileCount++;
-                        totalSize += it->file_size();
+                        std::error_code sizeEc;
+                        totalSize += it->file_size(sizeEc);
                     }
                 }
+            }
             } catch (const fs::filesystem_error &e) {
                 LOG_WARNING("Отказ в доступе к " + path + ": " + e.what());
             }
@@ -494,13 +498,20 @@ void Cleaner::printPlan() {
     };
     std::vector<Stat> stats;
     stats.reserve(targets.size());
+    std::vector<std::vector<uintmax_t>> sizes;
+    sizes.resize(targets.size());
     uintmax_t totalBytes = 0;
     for (size_t i = 0; i < targets.size(); ++i) {
         const auto &group = targets[i];
+        if (group.paths.empty()) continue;
         uintmax_t groupBytes = 0;
+        sizes[i].reserve(group.paths.size());
         for (const auto &path : group.paths) {
-            groupBytes += directorySize(path);
+            uintmax_t bytes = directorySize(path);
+            sizes[i].push_back(bytes);
+            groupBytes += bytes;
         }
+        if (groupBytes == 0) continue;
         totalBytes += groupBytes;
         stats.push_back({i, groupBytes});
     }
@@ -509,16 +520,18 @@ void Cleaner::printPlan() {
 
     for (const auto &stat : stats) {
         const auto &group = targets[stat.index];
+        size_t nonZeroCount = 0;
+        for (uintmax_t bytes : sizes[stat.index]) {
+            if (bytes > 0) nonZeroCount++;
+        }
         std::string line = group.scope + " / " + group.name + " - " +
-            std::to_string(group.paths.size()) + " путей, " + formatSize(stat.bytes);
+            std::to_string(nonZeroCount) + " путей, " + formatSize(stat.bytes);
         LOG_INFO(line);
         if (config.verbose) {
-            if (group.paths.empty()) {
-                LOG_INFO("    " + group.pattern);
-            } else {
-                for (const auto &path : group.paths) {
-                    LOG_INFO("    " + path + " - " + formatSize(directorySize(path)));
-                }
+            for (size_t i = 0; i < group.paths.size(); ++i) {
+                uintmax_t bytes = sizes[stat.index][i];
+                if (bytes == 0) continue;
+                LOG_INFO("    " + group.paths[i] + " - " + formatSize(bytes));
             }
         }
     }
