@@ -44,6 +44,38 @@ cmake -S . -B build && cmake --build build
 ./bin/cleaner --config configs/basic.cfg --verbose
 ```
 
+### Примеры bash запусков (очистка компьютера)
+
+Проверка плана и размеров (без удаления):
+```bash
+./bin/cleaner --config configs/basic.cfg --dry-run --verbose
+```
+
+Только Linux-кэш и временные файлы (без Windows путей, полезно в WSL):
+```bash
+./bin/cleaner --config configs/basic.cfg --os linux --dry-run --verbose
+```
+
+Реальная очистка после проверки плана:
+```bash
+./bin/cleaner --config configs/basic.cfg --os linux --verbose
+```
+
+Очистка + CLI кэши инструментов (pip/npm/yarn/pnpm/go/nuget):
+```bash
+./bin/cleaner --config configs/basic.cfg --os linux --cli-clean --verbose
+```
+
+Очистка Docker (без удаления образов и volumes):
+```bash
+./bin/cleaner --config configs/basic.cfg --docker-prune --verbose
+```
+
+Очистка с попыткой sudo для недоступных путей (только если уверены в конфиге):
+```bash
+./bin/cleaner --config configs/basic.cfg --os linux --allow-sudo --verbose
+```
+
 ### Основные флаги
 
 - `--config <path>` — путь к конфигу.
